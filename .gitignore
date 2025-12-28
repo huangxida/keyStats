@@ -2,6 +2,9 @@
 .AppleDouble
 .LSOverride
 Icon
+*.dmg
+
+dist
 
 # Xcode
 build/

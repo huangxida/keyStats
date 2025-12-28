@@ -77,13 +77,35 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func applyAppIcon() {
-        let symbolName = "button.horizontal.top.press.fill"
-        let config = NSImage.SymbolConfiguration(pointSize: 256, weight: .regular)
-        guard let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)?
+        let symbolName = "button.horizontal.top.press"
+        let size: CGFloat = 256
+        let symbolScale: CGFloat = 0.55
+        let config = NSImage.SymbolConfiguration(pointSize: size * symbolScale, weight: .regular)
+        guard let symbol = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)?
             .withSymbolConfiguration(config) else {
             return
         }
-        image.isTemplate = false
+        
+        let image = NSImage(size: NSSize(width: size, height: size))
+        image.lockFocus()
+        let rect = NSRect(x: 0, y: 0, width: size, height: size)
+        let gradient = NSGradient(colors: [
+            NSColor(calibratedRed: 0.15, green: 0.77, blue: 0.96, alpha: 1.0),
+            NSColor(calibratedRed: 0.49, green: 0.86, blue: 0.42, alpha: 1.0)
+        ])
+        gradient?.draw(in: rect, angle: 45)
+        
+        let symbolSize = size * symbolScale
+        let symbolRect = NSRect(
+            x: (size - symbolSize) / 2,
+            y: (size - symbolSize) / 2,
+            width: symbolSize,
+            height: symbolSize
+        )
+        NSColor.white.set()
+        symbol.draw(in: symbolRect, from: .zero, operation: .sourceOver, fraction: 1.0)
+        image.unlockFocus()
+        
         NSApp.applicationIconImage = image
     }
 }
