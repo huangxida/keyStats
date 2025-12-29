@@ -49,6 +49,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func showPermissionAlert() {
         let alert = NSAlert()
         alert.messageText = "需要辅助功能权限"
+        if let appIcon = NSApp.applicationIconImage {
+            alert.icon = makeRoundedAlertIcon(from: appIcon)
+        }
         alert.informativeText = """
         KeyStats 需要辅助功能权限来监听键盘和鼠标事件。
         
@@ -65,15 +68,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         if alert.runModal() == .alertFirstButtonReturn {
             openAccessibilitySettings()
+            _ = InputMonitor.shared.checkAccessibilityPermission()
         }
-        
-        // 触发系统权限请求弹窗
-        _ = InputMonitor.shared.checkAccessibilityPermission()
     }
     
     private func openAccessibilitySettings() {
         let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
         NSWorkspace.shared.open(url)
+    }
+
+    private func makeRoundedAlertIcon(from image: NSImage) -> NSImage {
+        let targetSize: CGFloat = 64
+        let rect = NSRect(x: 0, y: 0, width: targetSize, height: targetSize)
+        let icon = NSImage(size: rect.size)
+        icon.lockFocus()
+        let radius = targetSize * 0.22
+        let path = NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius)
+        path.addClip()
+        image.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1.0)
+        icon.unlockFocus()
+        return icon
     }
 
     private func applyAppIcon() {

@@ -100,6 +100,7 @@ class StatsManager {
     // MARK: - 数据更新方法
     
     func incrementKeyPresses(keyName: String? = nil) {
+        ensureCurrentDay()
         currentStats.keyPresses += 1
         if let keyName = keyName, !keyName.isEmpty {
             currentStats.keyPressCounts[keyName, default: 0] += 1
@@ -107,18 +108,22 @@ class StatsManager {
     }
     
     func incrementLeftClicks() {
+        ensureCurrentDay()
         currentStats.leftClicks += 1
     }
     
     func incrementRightClicks() {
+        ensureCurrentDay()
         currentStats.rightClicks += 1
     }
     
     func addMouseDistance(_ distance: Double) {
+        ensureCurrentDay()
         currentStats.mouseDistance += distance
     }
     
     func addScrollDistance(_ distance: Double) {
+        ensureCurrentDay()
         currentStats.scrollDistance += abs(distance)
     }
     
@@ -184,6 +189,13 @@ class StatsManager {
     
     func resetStats() {
         currentStats = DailyStats()
+    }
+
+    private func ensureCurrentDay() {
+        let today = Calendar.current.startOfDay(for: Date())
+        if !Calendar.current.isDate(currentStats.date, inSameDayAs: today) {
+            currentStats = DailyStats(date: today)
+        }
     }
     
     // MARK: - 格式化显示

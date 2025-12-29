@@ -6,12 +6,11 @@ class StatsPopoverViewController: NSViewController {
     // MARK: - UI 组件
     private var containerView: NSView!
     private var titleLabel: NSTextField!
-    private var dateLabel: NSTextField!
     private var statsStackView: NSStackView!
     private var keyBreakdownTitleLabel: NSTextField!
-    private var keyBreakdownScrollView: NSScrollView!
-    private var keyBreakdownContentView: NSView!
-    private var keyBreakdownStackView: NSStackView!
+    private var keyBreakdownGridStack: NSStackView!
+    private var keyBreakdownColumns: [NSStackView] = []
+    private var keyBreakdownSeparators: [NSView] = []
     private var historyTitleLabel: NSTextField!
     private var rangeControl: NSSegmentedControl!
     private var metricControl: NSSegmentedControl!
@@ -29,6 +28,7 @@ class StatsPopoverViewController: NSViewController {
     // 底部按钮
     private var resetButton: NSButton!
     private var quitButton: NSButton!
+    private var permissionButton: NSButton!
     
     // MARK: - 生命周期
     
@@ -52,6 +52,16 @@ class StatsPopoverViewController: NSViewController {
             object: nil
         )
     }
+
+    override func viewWillAppear() {
+        super.viewWillAppear()
+        updatePermissionButtonVisibility()
+    }
+
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        focusPrimaryControl()
+    }
     
     deinit {
         NotificationCenter.default.removeObserver(self)
@@ -65,14 +75,12 @@ class StatsPopoverViewController: NSViewController {
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(titleLabel)
         
-        // 日期
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy年MM月dd日"
-        dateLabel = createLabel(text: dateFormatter.string(from: Date()), fontSize: 12, weight: .regular)
-        dateLabel.textColor = .secondaryLabelColor
-        dateLabel.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(dateLabel)
-        
+        permissionButton = NSButton(title: "获取权限", target: self, action: #selector(requestPermission))
+        permissionButton.bezelStyle = .rounded
+        permissionButton.controlSize = .regular
+        permissionButton.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(permissionButton)
+
         // 分隔线
         let separator = NSBox()
         separator.boxType = .separator
@@ -86,40 +94,65 @@ class StatsPopoverViewController: NSViewController {
         mouseDistanceView = StatItemView(icon: "↔️", title: "鼠标移动", value: "0 px")
         scrollDistanceView = StatItemView(icon: "↕️", title: "滚动距离", value: "0 px")
         
+        let clickRow = NSStackView(views: [leftClickView, rightClickView])
+        clickRow.orientation = .horizontal
+        clickRow.spacing = 12
+        clickRow.distribution = .fillEqually
+        clickRow.alignment = .centerY
+        clickRow.translatesAutoresizingMaskIntoConstraints = false
+
+        let distanceRow = NSStackView(views: [mouseDistanceView, scrollDistanceView])
+        distanceRow.orientation = .horizontal
+        distanceRow.spacing = 12
+        distanceRow.distribution = .fillEqually
+        distanceRow.alignment = .centerY
+        distanceRow.translatesAutoresizingMaskIntoConstraints = false
+
         statsStackView = NSStackView(views: [
             keyPressView,
-            leftClickView,
-            rightClickView,
-            mouseDistanceView,
-            scrollDistanceView
+            clickRow,
+            distanceRow
         ])
         statsStackView.orientation = .vertical
         statsStackView.spacing = 8
         statsStackView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(statsStackView)
-
+        
         // 键位统计标题
         keyBreakdownTitleLabel = createLabel(text: "键位统计", fontSize: 14, weight: .semibold)
         keyBreakdownTitleLabel.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(keyBreakdownTitleLabel)
 
-        // 键位统计列表
-        keyBreakdownScrollView = NSScrollView()
-        keyBreakdownScrollView.drawsBackground = false
-        keyBreakdownScrollView.hasVerticalScroller = true
-        keyBreakdownScrollView.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(keyBreakdownScrollView)
+        // 键位统计列表（最多 3 列，每列 5 个）
+        keyBreakdownGridStack = NSStackView()
+        keyBreakdownGridStack.orientation = .horizontal
+        keyBreakdownGridStack.spacing = 10
+        keyBreakdownGridStack.distribution = .fill
+        keyBreakdownGridStack.alignment = .top
+        keyBreakdownGridStack.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(keyBreakdownGridStack)
 
-        keyBreakdownContentView = NSView()
-        keyBreakdownContentView.translatesAutoresizingMaskIntoConstraints = false
-        keyBreakdownScrollView.documentView = keyBreakdownContentView
+        keyBreakdownColumns = (0..<3).map { index in
+            let column = NSStackView()
+            column.orientation = .vertical
+            column.spacing = 6
+            column.alignment = .leading
+            column.distribution = .fill
+            column.translatesAutoresizingMaskIntoConstraints = false
+            keyBreakdownGridStack.addArrangedSubview(column)
+            if index < 2 {
+                let separator = makeVerticalSeparator()
+                keyBreakdownSeparators.append(separator)
+                keyBreakdownGridStack.addArrangedSubview(separator)
+                separator.heightAnchor.constraint(equalTo: keyBreakdownGridStack.heightAnchor).isActive = true
+            }
+            return column
+        }
 
-        keyBreakdownStackView = NSStackView()
-        keyBreakdownStackView.orientation = .vertical
-        keyBreakdownStackView.spacing = 6
-        keyBreakdownStackView.alignment = .leading
-        keyBreakdownStackView.translatesAutoresizingMaskIntoConstraints = false
-        keyBreakdownContentView.addSubview(keyBreakdownStackView)
+        if keyBreakdownColumns.count == 3 {
+            keyBreakdownColumns[0].widthAnchor.constraint(equalTo: keyBreakdownColumns[1].widthAnchor).isActive = true
+            keyBreakdownColumns[1].widthAnchor.constraint(equalTo: keyBreakdownColumns[2].widthAnchor).isActive = true
+        }
 
         // 历史趋势标题
         historyTitleLabel = createLabel(text: "历史趋势", fontSize: 14, weight: .semibold)
@@ -188,6 +221,7 @@ class StatsPopoverViewController: NSViewController {
         
         buttonStack.addArrangedSubview(resetButton)
         buttonStack.addArrangedSubview(quitButton)
+
         view.addSubview(buttonStack)
         
         // 布局约束
@@ -195,13 +229,12 @@ class StatsPopoverViewController: NSViewController {
             // 标题
             titleLabel.topAnchor.constraint(equalTo: view.topAnchor, constant: 16),
             titleLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            
-            // 日期
-            dateLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 4),
-            dateLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+
+            permissionButton.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
+            permissionButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
             
             // 分隔线
-            separator.topAnchor.constraint(equalTo: dateLabel.bottomAnchor, constant: 12),
+            separator.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 12),
             separator.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             separator.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
             
@@ -214,24 +247,13 @@ class StatsPopoverViewController: NSViewController {
             keyBreakdownTitleLabel.topAnchor.constraint(equalTo: statsStackView.bottomAnchor, constant: 16),
             keyBreakdownTitleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
 
-            keyBreakdownScrollView.topAnchor.constraint(equalTo: keyBreakdownTitleLabel.bottomAnchor, constant: 8),
-            keyBreakdownScrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            keyBreakdownScrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-            keyBreakdownScrollView.heightAnchor.constraint(equalToConstant: 120),
-
-            keyBreakdownContentView.leadingAnchor.constraint(equalTo: keyBreakdownScrollView.contentView.leadingAnchor),
-            keyBreakdownContentView.trailingAnchor.constraint(equalTo: keyBreakdownScrollView.contentView.trailingAnchor),
-            keyBreakdownContentView.topAnchor.constraint(equalTo: keyBreakdownScrollView.contentView.topAnchor),
-            keyBreakdownContentView.bottomAnchor.constraint(equalTo: keyBreakdownScrollView.contentView.bottomAnchor),
-            keyBreakdownContentView.widthAnchor.constraint(equalTo: keyBreakdownScrollView.widthAnchor),
-
-            keyBreakdownStackView.leadingAnchor.constraint(equalTo: keyBreakdownContentView.leadingAnchor),
-            keyBreakdownStackView.trailingAnchor.constraint(equalTo: keyBreakdownContentView.trailingAnchor),
-            keyBreakdownStackView.topAnchor.constraint(equalTo: keyBreakdownContentView.topAnchor),
-            keyBreakdownStackView.bottomAnchor.constraint(equalTo: keyBreakdownContentView.bottomAnchor),
+            keyBreakdownGridStack.topAnchor.constraint(equalTo: keyBreakdownTitleLabel.bottomAnchor, constant: 8),
+            keyBreakdownGridStack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            keyBreakdownGridStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            keyBreakdownGridStack.heightAnchor.constraint(equalToConstant: 124),
 
             // 历史趋势
-            historyTitleLabel.topAnchor.constraint(equalTo: keyBreakdownScrollView.bottomAnchor, constant: 16),
+            historyTitleLabel.topAnchor.constraint(equalTo: keyBreakdownGridStack.bottomAnchor, constant: 16),
             historyTitleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             
             rangeControl.topAnchor.constraint(equalTo: historyTitleLabel.bottomAnchor, constant: 8),
@@ -275,6 +297,15 @@ class StatsPopoverViewController: NSViewController {
         label.drawsBackground = false
         return label
     }
+
+    private func makeVerticalSeparator() -> NSView {
+        let view = NSView()
+        view.wantsLayer = true
+        view.layer?.backgroundColor = NSColor.separatorColor.withAlphaComponent(0.35).cgColor
+        view.translatesAutoresizingMaskIntoConstraints = false
+        view.widthAnchor.constraint(equalToConstant: 1).isActive = true
+        return view
+    }
     
     // MARK: - 更新统计数据
     
@@ -294,6 +325,7 @@ class StatsPopoverViewController: NSViewController {
         scrollDistanceView.updateValue(stats.formattedScrollDistance)
         updateKeyBreakdown()
         updateHistorySection()
+        updatePermissionButtonVisibility()
     }
     
     private func formatNumber(_ number: Int) -> String {
@@ -304,27 +336,47 @@ class StatsPopoverViewController: NSViewController {
 
     private func updateKeyBreakdown() {
         let items = StatsManager.shared.keyPressBreakdownSorted()
-        keyBreakdownStackView.arrangedSubviews.forEach {
-            keyBreakdownStackView.removeArrangedSubview($0)
-            $0.removeFromSuperview()
+        let hasItems = !items.isEmpty
+        keyBreakdownSeparators.forEach { $0.isHidden = !hasItems }
+        for column in keyBreakdownColumns {
+            column.arrangedSubviews.forEach {
+                column.removeArrangedSubview($0)
+                $0.removeFromSuperview()
+            }
         }
-        guard !items.isEmpty else {
+        guard hasItems else {
             let emptyLabel = createLabel(text: "暂无键位数据", fontSize: 12, weight: .regular)
             emptyLabel.textColor = .secondaryLabelColor
             emptyLabel.translatesAutoresizingMaskIntoConstraints = false
-            keyBreakdownStackView.addArrangedSubview(emptyLabel)
-            emptyLabel.widthAnchor.constraint(equalTo: keyBreakdownStackView.widthAnchor).isActive = true
+            if let firstColumn = keyBreakdownColumns.first {
+                firstColumn.addArrangedSubview(emptyLabel)
+                emptyLabel.widthAnchor.constraint(equalTo: firstColumn.widthAnchor).isActive = true
+            }
             return
         }
-        for item in items {
+        let limitedItems = Array(items.prefix(15))
+        for (index, item) in limitedItems.enumerated() {
+            let columnIndex = index / 5
+            if columnIndex >= keyBreakdownColumns.count { break }
             let row = KeyCountRowView(key: item.key, count: formatNumber(item.count))
-            keyBreakdownStackView.addArrangedSubview(row)
-            row.widthAnchor.constraint(equalTo: keyBreakdownStackView.widthAnchor).isActive = true
+            let column = keyBreakdownColumns[columnIndex]
+            column.addArrangedSubview(row)
+            row.widthAnchor.constraint(equalTo: column.widthAnchor).isActive = true
         }
     }
 
     @objc private func historyControlsChanged() {
         updateHistorySection()
+    }
+
+    private func updatePermissionButtonVisibility() {
+        permissionButton.isHidden = InputMonitor.shared.hasAccessibilityPermission()
+    }
+
+    private func focusPrimaryControl() {
+        if !permissionButton.isHidden {
+            view.window?.makeFirstResponder(permissionButton)
+        }
     }
     
     private func updateHistorySection() {
@@ -380,9 +432,20 @@ class StatsPopoverViewController: NSViewController {
             StatsManager.shared.resetStats()
         }
     }
+
+    @objc private func requestPermission() {
+        _ = InputMonitor.shared.checkAccessibilityPermission()
+        openAccessibilitySettings()
+        updatePermissionButtonVisibility()
+    }
     
     @objc private func quitApp() {
         NSApplication.shared.terminate(nil)
+    }
+
+    private func openAccessibilitySettings() {
+        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
+        NSWorkspace.shared.open(url)
     }
 }
 
