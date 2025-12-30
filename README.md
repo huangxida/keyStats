@@ -1,5 +1,6 @@
 # KeyStats - macOS 键鼠统计菜单栏应用
-<img width="350" height="737" alt="image" src="https://github.com/user-attachments/assets/0070d44e-b01c-476a-b749-d590c8caa6f9" />
+<img width="363" height="740" alt="image" src="https://github.com/user-attachments/assets/91490d6f-44bf-49ed-9180-e5490bd34c14" />
+
 
 KeyStats 是一款轻量级的 macOS 原生菜单栏应用，用于统计用户每日的键盘敲击次数、鼠标点击次数、鼠标移动距离和滚动距离。
 
