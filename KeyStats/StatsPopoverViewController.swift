@@ -96,14 +96,14 @@ class StatsPopoverViewController: NSViewController {
         
         let clickRow = NSStackView(views: [leftClickView, rightClickView])
         clickRow.orientation = .horizontal
-        clickRow.spacing = 12
+        clickRow.spacing = 16
         clickRow.distribution = .fillEqually
         clickRow.alignment = .centerY
         clickRow.translatesAutoresizingMaskIntoConstraints = false
 
         let distanceRow = NSStackView(views: [mouseDistanceView, scrollDistanceView])
         distanceRow.orientation = .horizontal
-        distanceRow.spacing = 12
+        distanceRow.spacing = 16
         distanceRow.distribution = .fillEqually
         distanceRow.alignment = .centerY
         distanceRow.translatesAutoresizingMaskIntoConstraints = false
@@ -512,9 +512,9 @@ class StatItemView: NSView {
             
             iconLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
             iconLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-            iconLabel.widthAnchor.constraint(equalToConstant: 30),
+            iconLabel.widthAnchor.constraint(equalToConstant: 24),
             
-            titleLabel.leadingAnchor.constraint(equalTo: iconLabel.trailingAnchor, constant: 8),
+            titleLabel.leadingAnchor.constraint(equalTo: iconLabel.trailingAnchor, constant: 4),
             titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
             
             valueLabel.trailingAnchor.constraint(equalTo: trailingAnchor),
@@ -533,6 +533,25 @@ class StatItemView: NSView {
 class KeyCountRowView: NSView {
     private var keyLabel: NSTextField!
     private var countLabel: NSTextField!
+    private static let symbolNameMap: [String: String] = [
+        "Cmd": "command",
+        "Shift": "shift",
+        "Option": "option",
+        "Ctrl": "control",
+        "Fn": "fn",
+        "Esc": "escape",
+        "Escape": "escape",
+        "Tab": "tab",
+        "Return": "return",
+        "Enter": "return",
+        "Delete": "delete.left",
+        "ForwardDelete": "delete.right",
+        "Left": "arrow.left",
+        "Right": "arrow.right",
+        "Up": "arrow.up",
+        "Down": "arrow.down"
+    ]
+    private static let squareSymbolKeys: Set<String> = ["Ctrl", "Control"]
 
     init(key: String, count: String) {
         super.init(frame: .zero)
@@ -545,9 +564,9 @@ class KeyCountRowView: NSView {
 
     private func setupUI(key: String, count: String) {
         translatesAutoresizingMaskIntoConstraints = false
-
-        keyLabel = NSTextField(labelWithString: key)
-        keyLabel.font = NSFont.systemFont(ofSize: 12, weight: .medium)
+        let keyFont = NSFont.systemFont(ofSize: 12, weight: .medium)
+        keyLabel = NSTextField(labelWithAttributedString: formattedKeyLabel(for: key, font: keyFont))
+        keyLabel.font = keyFont
         keyLabel.textColor = .labelColor
         keyLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(keyLabel)
@@ -572,8 +591,141 @@ class KeyCountRowView: NSView {
     }
 
     func update(key: String, count: String) {
-        keyLabel.stringValue = key
+        if let font = keyLabel.font {
+            keyLabel.attributedStringValue = formattedKeyLabel(for: key, font: font)
+        } else {
+            keyLabel.stringValue = key
+        }
         countLabel.stringValue = count
+    }
+
+    private func formattedKeyLabel(for key: String, font: NSFont) -> NSAttributedString {
+        let textAttributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: NSColor.labelColor
+        ]
+        let result = NSMutableAttributedString()
+
+        for (index, part) in keyParts(from: key).enumerated() {
+            if index > 0 {
+                result.append(NSAttributedString(string: " ", attributes: textAttributes))
+            }
+            if let badge = makeKeyBadge(for: part, font: font) {
+                let attachment = NSTextAttachment()
+                attachment.image = badge
+                let baselineOffset = (font.ascender + font.descender - badge.size.height) / 2 + 1
+                attachment.bounds = CGRect(x: 0, y: baselineOffset, width: badge.size.width, height: badge.size.height)
+                result.append(NSAttributedString(attachment: attachment))
+            } else {
+                result.append(NSAttributedString(string: part, attributes: textAttributes))
+            }
+        }
+
+        return result
+    }
+
+    private func makeKeyBadge(for keyPart: String, font: NSFont) -> NSImage? {
+        let contentPointSize = max(font.pointSize - 1, 10)
+        let padding: CGFloat = 4
+        let lineWidth: CGFloat = 0.8
+        let cornerRadiusScale: CGFloat = 0.3
+        let textFont = NSFont.systemFont(ofSize: contentPointSize, weight: .medium)
+        let textAttributes: [NSAttributedString.Key: Any] = [
+            .font: textFont,
+            .foregroundColor: NSColor.labelColor
+        ]
+        let textMetricsHeight = ("M" as NSString).size(withAttributes: textAttributes).height
+        let badgeHeight = ceil(max(textMetricsHeight, contentPointSize) + padding * 2)
+
+        if let symbolName = Self.symbolNameMap[keyPart],
+           let symbol = NSImage(systemSymbolName: symbolName, accessibilityDescription: keyPart)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: contentPointSize, weight: .medium)) {
+            let symbolSize = symbol.size
+            let forceSquare = Self.squareSymbolKeys.contains(keyPart)
+            let symbolRectSize: NSSize
+            let badgeWidth: CGFloat
+
+            if forceSquare {
+                let maxSide = contentPointSize
+                let scale = min(maxSide / symbolSize.width, maxSide / symbolSize.height)
+                symbolRectSize = NSSize(width: symbolSize.width * scale, height: symbolSize.height * scale)
+                badgeWidth = badgeHeight
+            } else {
+                let aspectRatio = symbolSize.height > 0 ? (symbolSize.width / symbolSize.height) : 1
+                let symbolHeight = contentPointSize
+                let symbolWidth = symbolHeight * aspectRatio
+                symbolRectSize = NSSize(width: symbolWidth, height: symbolHeight)
+                badgeWidth = ceil(max(badgeHeight, symbolWidth + padding * 2))
+            }
+            let badgeSize = NSSize(width: badgeWidth, height: badgeHeight)
+            return drawBadge(size: badgeSize, cornerRadius: badgeHeight * cornerRadiusScale, lineWidth: lineWidth) { rect in
+                let symbolRect = NSRect(
+                    x: rect.midX - symbolRectSize.width / 2,
+                    y: rect.midY - symbolRectSize.height / 2,
+                    width: symbolRectSize.width,
+                    height: symbolRectSize.height
+                )
+                symbol.isTemplate = true
+                NSColor.labelColor.set()
+                symbol.draw(in: symbolRect)
+            }
+        }
+
+        let text = keyPart
+        let textSize = (text as NSString).size(withAttributes: textAttributes)
+        let contentHeight = max(contentPointSize, textSize.height)
+        let badgeWidth = ceil(max(badgeHeight, textSize.width + padding * 2))
+        let badgeSize = NSSize(width: badgeWidth, height: badgeHeight)
+        return drawBadge(size: badgeSize, cornerRadius: badgeHeight * cornerRadiusScale, lineWidth: lineWidth) { rect in
+            let textRect = NSRect(
+                x: rect.midX - textSize.width / 2,
+                y: rect.midY - textSize.height / 2,
+                width: textSize.width,
+                height: textSize.height
+            )
+            (text as NSString).draw(in: textRect, withAttributes: textAttributes)
+        }
+    }
+
+    private func drawBadge(size: NSSize, cornerRadius: CGFloat, lineWidth: CGFloat, content: (NSRect) -> Void) -> NSImage {
+        let image = NSImage(size: size)
+        image.lockFocus()
+        NSGraphicsContext.current?.shouldAntialias = true
+        NSGraphicsContext.current?.imageInterpolation = .high
+
+        let rect = NSRect(
+            x: lineWidth / 2,
+            y: lineWidth / 2,
+            width: size.width - lineWidth,
+            height: size.height - lineWidth
+        )
+        let path = NSBezierPath(roundedRect: rect, xRadius: cornerRadius, yRadius: cornerRadius)
+        path.lineJoinStyle = .round
+        path.lineCapStyle = .round
+        NSColor.controlBackgroundColor.withAlphaComponent(0.35).setFill()
+        path.fill()
+        NSColor.separatorColor.withAlphaComponent(0.35).setStroke()
+        path.lineWidth = lineWidth
+        path.stroke()
+
+        content(rect)
+
+        image.unlockFocus()
+        return image
+    }
+
+    private func keyParts(from key: String) -> [String] {
+        guard key.contains("+") else { return [key] }
+        if key.hasSuffix("+") {
+            var trimmed = String(key.dropLast())
+            if trimmed.hasSuffix("+") {
+                trimmed = String(trimmed.dropLast())
+            }
+            var parts = trimmed.split(separator: "+").map { String($0) }
+            parts.append("+")
+            return parts.isEmpty ? [key] : parts
+        }
+        return key.split(separator: "+").map { String($0) }
     }
 }
 
