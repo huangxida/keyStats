@@ -68,9 +68,12 @@ class StatsManager {
     private let dateFormatter: DateFormatter
     private var history: [String: DailyStats] = [:]
     private var saveTimer: Timer?
+    private var statsUpdateTimer: Timer?
     private let saveInterval: TimeInterval = 2.0
+    private let statsUpdateDebounceInterval: TimeInterval = 0.3
     private var isReadyForUpdates = false
     var menuBarUpdateHandler: (() -> Void)?
+    var statsUpdateHandler: (() -> Void)?
     
     /// 当前统计数据
     private(set) var currentStats: DailyStats {
@@ -113,28 +116,33 @@ class StatsManager {
             currentStats.keyPressCounts[keyName, default: 0] += 1
         }
         notifyMenuBarUpdate()
+        notifyStatsUpdate()
     }
     
     func incrementLeftClicks() {
         ensureCurrentDay()
         currentStats.leftClicks += 1
         notifyMenuBarUpdate()
+        notifyStatsUpdate()
     }
     
     func incrementRightClicks() {
         ensureCurrentDay()
         currentStats.rightClicks += 1
         notifyMenuBarUpdate()
+        notifyStatsUpdate()
     }
     
     func addMouseDistance(_ distance: Double) {
         ensureCurrentDay()
         currentStats.mouseDistance += distance
+        scheduleDebouncedStatsUpdate()
     }
     
     func addScrollDistance(_ distance: Double) {
         ensureCurrentDay()
         currentStats.scrollDistance += abs(distance)
+        scheduleDebouncedStatsUpdate()
     }
     
     // MARK: - 数据持久化
@@ -193,9 +201,31 @@ class StatsManager {
         }
     }
 
+    private func notifyStatsUpdate() {
+        guard statsUpdateHandler != nil else { return }
+        DispatchQueue.main.async { [weak self] in
+            self?.statsUpdateHandler?()
+        }
+    }
+
+    private func scheduleDebouncedStatsUpdate() {
+        guard statsUpdateHandler != nil else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            // 取消旧的 timer，实现真正的防抖
+            self.statsUpdateTimer?.invalidate()
+            self.statsUpdateTimer = Timer.scheduledTimer(withTimeInterval: self.statsUpdateDebounceInterval, repeats: false) { [weak self] _ in
+                self?.statsUpdateTimer = nil
+                self?.notifyStatsUpdate()
+            }
+        }
+    }
+
     func flushPendingSave() {
         saveTimer?.invalidate()
         saveTimer = nil
+        statsUpdateTimer?.invalidate()
+        statsUpdateTimer = nil
         saveStats()
     }
     
@@ -221,6 +251,7 @@ class StatsManager {
     func resetStats() {
         currentStats = DailyStats()
         notifyMenuBarUpdate()
+        notifyStatsUpdate()
     }
 
     private func ensureCurrentDay() {

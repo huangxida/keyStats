@@ -17,7 +17,7 @@ class StatsPopoverViewController: NSViewController {
     private var chartStyleControl: NSSegmentedControl!
     private var chartView: StatsChartView!
     private var historySummaryLabel: NSTextField!
-    private var updateTimer: Timer?
+    private var pendingStatsRefresh = false
     
     // 统计项视图
     private var keyPressView: StatItemView!
@@ -49,7 +49,7 @@ class StatsPopoverViewController: NSViewController {
     override func viewWillAppear() {
         super.viewWillAppear()
         updateStats()
-        startUpdateTimer()
+        startLiveUpdates()
     }
 
     override func viewDidAppear() {
@@ -59,11 +59,11 @@ class StatsPopoverViewController: NSViewController {
 
     override func viewWillDisappear() {
         super.viewWillDisappear()
-        stopUpdateTimer()
+        stopLiveUpdates()
     }
     
     deinit {
-        stopUpdateTimer()
+        stopLiveUpdates()
     }
     
     // MARK: - UI 设置
@@ -336,16 +336,25 @@ class StatsPopoverViewController: NSViewController {
         updatePermissionButtonVisibility()
     }
 
-    private func startUpdateTimer() {
-        updateTimer?.invalidate()
-        updateTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.updateStats()
+    private func startLiveUpdates() {
+        StatsManager.shared.statsUpdateHandler = { [weak self] in
+            self?.scheduleStatsRefresh()
         }
     }
 
-    private func stopUpdateTimer() {
-        updateTimer?.invalidate()
-        updateTimer = nil
+    private func stopLiveUpdates() {
+        StatsManager.shared.statsUpdateHandler = nil
+        pendingStatsRefresh = false
+    }
+
+    private func scheduleStatsRefresh() {
+        guard !pendingStatsRefresh else { return }
+        pendingStatsRefresh = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.updateStats()
+            self.pendingStatsRefresh = false
+        }
     }
     
     private func formatNumber(_ number: Int) -> String {
