@@ -127,6 +127,7 @@ class MenuBarController {
                         operation: .copy,
                         fraction: 1.0)
             resizedIcon.unlockFocus()
+            resizedIcon.isTemplate = true
 
             let attachment = NSTextAttachment()
             attachment.image = resizedIcon
@@ -175,10 +176,12 @@ class MenuBarStatusView: NSView {
                         operation: .copy,
                         fraction: 1.0)
             resizedIcon.unlockFocus()
+            resizedIcon.isTemplate = true
             imageView.image = resizedIcon
         }
         imageView.imageScaling = .scaleProportionallyUpOrDown
         imageView.imageAlignment = .alignCenter
+        imageView.contentTintColor = .labelColor
         imageView.translatesAutoresizingMaskIntoConstraints = false
         
         topLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .semibold)
