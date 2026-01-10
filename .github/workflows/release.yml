@@ -21,6 +21,12 @@ jobs:
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
+      - name: Update app version
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          sed -i '' "s/MARKETING_VERSION = .*/MARKETING_VERSION = $VERSION;/" KeyStats.xcodeproj/project.pbxproj
+          echo "Updated MARKETING_VERSION to $VERSION"
+
       - name: Build DMG
         run: ./scripts/build_dmg.sh
 

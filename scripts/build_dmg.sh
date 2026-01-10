@@ -88,7 +88,3 @@ echo ""
 echo "✅ 打包完成！"
 echo "📍 位置: $DMG_PATH"
 echo "📊 大小: $DMG_SIZE"
-echo ""
-
-# 打开输出目录
-open "$OUTPUT_DIR"
