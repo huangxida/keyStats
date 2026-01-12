@@ -23,6 +23,17 @@ echo "📦 发布 v$VERSION"
 echo "📝 更新版本号..."
 sed -i '' "s/MARKETING_VERSION = .*/MARKETING_VERSION = $VERSION;/" KeyStats.xcodeproj/project.pbxproj
 
+# 更新 build 号
+echo "🔢 更新 build 号..."
+CURRENT_BUILD=$(rg -m 1 "CURRENT_PROJECT_VERSION = " KeyStats.xcodeproj/project.pbxproj | sed -E 's/.*CURRENT_PROJECT_VERSION = ([0-9]+);.*/\1/')
+if [ -z "$CURRENT_BUILD" ]; then
+    echo "❌ 无法读取当前 build 号"
+    exit 1
+fi
+NEW_BUILD=$((CURRENT_BUILD + 1))
+sed -i '' "s/CURRENT_PROJECT_VERSION = .*/CURRENT_PROJECT_VERSION = $NEW_BUILD;/" KeyStats.xcodeproj/project.pbxproj
+echo "🔢 build号更新至 $NEW_BUILD"
+
 # 提交更改
 echo "💾 提交更改..."
 git add KeyStats.xcodeproj/project.pbxproj
