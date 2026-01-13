@@ -5,6 +5,10 @@
 "button.permission" = "获取权限";
 "button.launchAtLogin" = "开机启动";
 "settings.title" = "设置";
+"settings.dynamicIconColor" = "动态图标颜色";
+"settings.dynamicIconColorStyle" = "动态颜色显示";
+"settings.dynamicIconColorStyle.icon" = "图标着色";
+"settings.dynamicIconColorStyle.dot" = "状态圆点";
 "settings.windowTitle" = "KeyStats设置";
 "button.back" = "返回";
 "setting.showKeyPresses" = "在菜单栏显示按键数";

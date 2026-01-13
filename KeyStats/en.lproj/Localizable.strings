@@ -5,6 +5,10 @@
 "button.permission" = "Grant Permission";
 "button.launchAtLogin" = "Open at Login";
 "settings.title" = "Settings";
+"settings.dynamicIconColor" = "Dynamic Icon Color";
+"settings.dynamicIconColorStyle" = "Dynamic Color Display";
+"settings.dynamicIconColorStyle.icon" = "Tint Icon";
+"settings.dynamicIconColorStyle.dot" = "Status Dot";
 "settings.windowTitle" = "KeyStats Settings";
 "button.back" = "Back";
 "setting.showKeyPresses" = "Show Key Presses in Menu Bar";

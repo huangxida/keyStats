@@ -6,6 +6,8 @@ class SettingsViewController: NSViewController, NSTextFieldDelegate {
     private var showKeyPressesButton: NSButton!
     private var showMouseClicksButton: NSButton!
     private var launchAtLoginButton: NSButton!
+    private var dynamicIconColorButton: NSButton!
+    private var dynamicIconColorStylePopUp: NSPopUpButton!
     private var resetButton: NSButton!
     private var showThresholdsButton: NSButton!
     private var thresholdStack: NSStackView!
@@ -17,6 +19,7 @@ class SettingsViewController: NSViewController, NSTextFieldDelegate {
     private let thresholdMinimum = 0
     private let thresholdMaximum = 1_000_000
     private let thresholdStep = 100.0
+    private let dynamicIconColorStyleKey = "dynamicIconColorStyle"
 
     private lazy var thresholdFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
@@ -71,12 +74,33 @@ class SettingsViewController: NSViewController, NSTextFieldDelegate {
                                         target: self,
                                         action: #selector(toggleShowThresholds))
 
-        let optionsStack = NSStackView(views: [showKeyPressesButton, showMouseClicksButton, launchAtLoginButton, showThresholdsButton])
+        dynamicIconColorButton = NSButton(checkboxWithTitle: NSLocalizedString("settings.dynamicIconColor", comment: ""),
+                                          target: self,
+                                          action: #selector(toggleDynamicIconColor))
+
+        dynamicIconColorStylePopUp = NSPopUpButton()
+        let iconStyleTitle = NSLocalizedString("settings.dynamicIconColorStyle.icon", comment: "")
+        let dotStyleTitle = NSLocalizedString("settings.dynamicIconColorStyle.dot", comment: "")
+        dynamicIconColorStylePopUp.addItems(withTitles: [iconStyleTitle, dotStyleTitle])
+        dynamicIconColorStylePopUp.item(at: 0)?.representedObject = DynamicIconColorStyle.icon.rawValue
+        dynamicIconColorStylePopUp.item(at: 1)?.representedObject = DynamicIconColorStyle.dot.rawValue
+        dynamicIconColorStylePopUp.target = self
+        dynamicIconColorStylePopUp.action = #selector(dynamicIconColorStyleChanged)
+
+        let styleLabel = NSTextField(labelWithString: NSLocalizedString("settings.dynamicIconColorStyle", comment: ""))
+        styleLabel.font = NSFont.systemFont(ofSize: 13)
+        let styleRow = NSStackView(views: [styleLabel, dynamicIconColorStylePopUp])
+        styleRow.orientation = .horizontal
+        styleRow.alignment = .centerY
+        styleRow.spacing = 8
+        styleRow.translatesAutoresizingMaskIntoConstraints = false
+
+        let optionsStack = NSStackView(views: [showKeyPressesButton, showMouseClicksButton, launchAtLoginButton, dynamicIconColorButton, styleRow, showThresholdsButton])
         optionsStack.orientation = .vertical
         optionsStack.alignment = .leading
         optionsStack.spacing = 8
         optionsStack.translatesAutoresizingMaskIntoConstraints = false
-
+ 
         keyPressThresholdField = makeThresholdField()
         keyPressThresholdStepper = makeThresholdStepper(action: #selector(keyPressThresholdStepperChanged))
         clickThresholdField = makeThresholdField()
@@ -130,10 +154,21 @@ class SettingsViewController: NSViewController, NSTextFieldDelegate {
         showKeyPressesButton.state = StatsManager.shared.showKeyPressesInMenuBar ? .on : .off
         showMouseClicksButton.state = StatsManager.shared.showMouseClicksInMenuBar ? .on : .off
         launchAtLoginButton.state = LaunchAtLoginManager.shared.isEnabled ? .on : .off
+        dynamicIconColorButton.state = StatsManager.shared.enableDynamicIconColor ? .on : .off
+        updateDynamicIconColorStyleSelection()
         let notificationsEnabled = StatsManager.shared.notificationsEnabled
         showThresholdsButton.state = notificationsEnabled ? .on : .off
         thresholdStack.isHidden = !notificationsEnabled
         updateThresholdUI()
+    }
+
+    private func updateDynamicIconColorStyleSelection() {
+        let styleValue = UserDefaults.standard.string(forKey: dynamicIconColorStyleKey) ?? DynamicIconColorStyle.icon.rawValue
+        let style = DynamicIconColorStyle(rawValue: styleValue) ?? .icon
+        if let item = dynamicIconColorStylePopUp.itemArray.first(where: { ($0.representedObject as? String) == style.rawValue }) {
+            dynamicIconColorStylePopUp.select(item)
+        }
+        dynamicIconColorStylePopUp.isEnabled = StatsManager.shared.enableDynamicIconColor
     }
 
     // MARK: - 通知阈值
@@ -263,6 +298,17 @@ class SettingsViewController: NSViewController, NSTextFieldDelegate {
         StatsManager.shared.showMouseClicksInMenuBar = (showMouseClicksButton.state == .on)
     }
 
+    @objc private func toggleDynamicIconColor() {
+        StatsManager.shared.enableDynamicIconColor = dynamicIconColorButton.state == .on
+        updateDynamicIconColorStyleSelection()
+    }
+
+    @objc private func dynamicIconColorStyleChanged() {
+        guard let rawValue = dynamicIconColorStylePopUp.selectedItem?.representedObject as? String else { return }
+        UserDefaults.standard.set(rawValue, forKey: dynamicIconColorStyleKey)
+        StatsManager.shared.menuBarUpdateHandler?()
+    }
+ 
     @objc private func toggleLaunchAtLogin() {
         let shouldEnable = launchAtLoginButton.state == .on
         do {

@@ -1,5 +1,10 @@
 import Cocoa
 
+enum DynamicIconColorStyle: String {
+    case icon
+    case dot
+}
+
 /// 菜单栏控制器
 class MenuBarController {
     
@@ -7,6 +12,7 @@ class MenuBarController {
     private var statusView: MenuBarStatusView?
     private var popover: NSPopover!
     private var eventMonitor: Any?
+    private let dynamicIconColorStyleKey = "dynamicIconColorStyle"
     
     init() {
         setupStatusItem()
@@ -99,12 +105,21 @@ class MenuBarController {
 
     private func updateMenuBarAppearance() {
         let parts = StatsManager.shared.getMenuBarTextParts()
+        let tintColor = StatsManager.shared.enableDynamicIconColor
+            ? StatsManager.shared.currentIconTintColor
+            : nil
+        let styleValue = UserDefaults.standard.string(forKey: dynamicIconColorStyleKey) ?? DynamicIconColorStyle.icon.rawValue
+        let style = DynamicIconColorStyle(rawValue: styleValue) ?? .icon
+
         if let statusView = statusView {
             statusView.update(keysText: parts.keys, clicksText: parts.clicks)
+            statusView.updateIconColor(tintColor, style: style)
             statusItem.length = statusView.intrinsicContentSize.width
         } else if let button = statusItem.button {
             button.attributedTitle = makeStatusTitle(keysText: parts.keys, clicksText: parts.clicks)
+            button.contentTintColor = style == .icon ? tintColor : nil
         }
+
     }
 
     private func makeStatusTitle(keysText: String, clicksText: String) -> NSAttributedString {
@@ -154,7 +169,9 @@ class MenuBarController {
 // MARK: - 菜单栏自定义视图
 
 class MenuBarStatusView: NSView {
+    private let iconContainer = NSView()
     private let imageView = NSImageView()
+    private let colorDotView = NSView()
     private let topLabel = NSTextField(labelWithString: "0")
     private let bottomLabel = NSTextField(labelWithString: "0")
     private let stack = NSStackView()
@@ -192,6 +209,16 @@ class MenuBarStatusView: NSView {
         imageView.imageAlignment = .alignCenter
         imageView.contentTintColor = .labelColor
         imageView.translatesAutoresizingMaskIntoConstraints = false
+
+        iconContainer.translatesAutoresizingMaskIntoConstraints = false
+        iconContainer.addSubview(imageView)
+
+        colorDotView.wantsLayer = true
+        colorDotView.layer?.cornerRadius = 3
+        colorDotView.layer?.backgroundColor = NSColor.clear.cgColor
+        colorDotView.translatesAutoresizingMaskIntoConstraints = false
+        colorDotView.isHidden = true
+        iconContainer.addSubview(colorDotView)
         
         topLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .semibold)
         bottomLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .medium)
@@ -210,7 +237,7 @@ class MenuBarStatusView: NSView {
         stack.alignment = .centerY
         stack.spacing = 4
         stack.translatesAutoresizingMaskIntoConstraints = false
-        stack.addArrangedSubview(imageView)
+        stack.addArrangedSubview(iconContainer)
         stack.addArrangedSubview(textStack)
         
         addSubview(stack)
@@ -219,8 +246,16 @@ class MenuBarStatusView: NSView {
         stackTrailingConstraint = stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -horizontalPadding)
 
         NSLayoutConstraint.activate([
-            imageView.widthAnchor.constraint(equalToConstant: 18),
-            imageView.heightAnchor.constraint(equalToConstant: 18),
+            iconContainer.widthAnchor.constraint(equalToConstant: 18),
+            iconContainer.heightAnchor.constraint(equalToConstant: 18),
+            imageView.leadingAnchor.constraint(equalTo: iconContainer.leadingAnchor),
+            imageView.trailingAnchor.constraint(equalTo: iconContainer.trailingAnchor),
+            imageView.topAnchor.constraint(equalTo: iconContainer.topAnchor),
+            imageView.bottomAnchor.constraint(equalTo: iconContainer.bottomAnchor),
+            colorDotView.widthAnchor.constraint(equalToConstant: 6),
+            colorDotView.heightAnchor.constraint(equalToConstant: 6),
+            colorDotView.leadingAnchor.constraint(equalTo: iconContainer.leadingAnchor, constant: -3),
+            colorDotView.topAnchor.constraint(equalTo: iconContainer.topAnchor, constant: -3),
             stackLeadingConstraint,
             stackTrailingConstraint,
             stack.centerYAnchor.constraint(equalTo: centerYAnchor)
@@ -248,6 +283,24 @@ class MenuBarStatusView: NSView {
         
         invalidateIntrinsicContentSize()
         needsLayout = true
+    }
+
+    func updateIconColor(_ color: NSColor?, style: DynamicIconColorStyle) {
+        guard let color = color else {
+            imageView.contentTintColor = .labelColor
+            colorDotView.isHidden = true
+            return
+        }
+
+        switch style {
+        case .icon:
+            imageView.contentTintColor = color
+            colorDotView.isHidden = true
+        case .dot:
+            imageView.contentTintColor = .labelColor
+            colorDotView.layer?.backgroundColor = color.cgColor
+            colorDotView.isHidden = false
+        }
     }
 
     private func updateHorizontalPadding(hasText: Bool) {
