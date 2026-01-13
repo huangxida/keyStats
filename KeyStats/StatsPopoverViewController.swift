@@ -328,7 +328,7 @@ class StatsPopoverViewController: NSViewController {
             historySummaryLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 16),
             
             // 底部分隔线
-            bottomSeparator.topAnchor.constraint(equalTo: historySummaryLabel.bottomAnchor, constant: 12),
+            bottomSeparator.topAnchor.constraint(equalTo: historySummaryLabel.bottomAnchor, constant: 16),
             bottomSeparator.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 16),
             bottomSeparator.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -16),
             

@@ -1,5 +1,6 @@
 import Foundation
 import Cocoa
+import UserNotifications
 
 private let metersPerPixel: Double = 0.000264583
 
@@ -70,6 +71,8 @@ class StatsManager {
     private let keyPressNotifyThresholdKey = "keyPressNotifyThreshold"
     private let clickNotifyThresholdKey = "clickNotifyThreshold"
     private let notificationsEnabledKey = "notificationsEnabled"
+    private let enableDynamicIconColorKey = "enableDynamicIconColor"
+    private let dynamicIconColorStyleKey = "dynamicIconColorStyle"
     private let dateFormatter: DateFormatter
     private var history: [String: DailyStats] = [:]
     private var saveTimer: Timer?
@@ -77,7 +80,19 @@ class StatsManager {
     private var midnightCheckTimer: Timer?
     private let saveInterval: TimeInterval = 2.0
     private let statsUpdateDebounceInterval: TimeInterval = 0.3
+    private let inputRateWindowSeconds: TimeInterval = 3.0
+    private let inputRateBucketInterval: TimeInterval = 0.5
+    private let inputRateApmThresholds: [Double] = [0, 80, 160, 240]
+    private let inputRateLock = NSLock()
     private var isReadyForUpdates = false
+    private lazy var inputRateBuckets: [Int] = {
+        let bucketCount = max(1, Int(inputRateWindowSeconds / inputRateBucketInterval))
+        return Array(repeating: 0, count: bucketCount)
+    }()
+    private var inputRateBucketIndex = 0
+    private var inputRateTimer: Timer?
+    private(set) var currentInputRatePerSecond: Double = 0
+    private(set) var currentIconTintColor: NSColor?
     var menuBarUpdateHandler: (() -> Void)?
     var statsUpdateHandler: (() -> Void)?
     
@@ -123,6 +138,28 @@ class StatsManager {
         }
     }
 
+    /// 设置：是否启用动态图标颜色
+    var enableDynamicIconColor: Bool {
+        didSet {
+            userDefaults.set(enableDynamicIconColor, forKey: enableDynamicIconColorKey)
+            let applyChanges = { [weak self] in
+                guard let self = self else { return }
+                if self.enableDynamicIconColor {
+                    self.resetInputRateBuckets()
+                    self.startInputRateTracking()
+                } else {
+                    self.stopInputRateTracking()
+                }
+                self.updateCurrentInputRate()
+            }
+            if Thread.isMainThread {
+                applyChanges()
+                return
+            }
+            DispatchQueue.main.async(execute: applyChanges)
+        }
+    }
+
     private var lastNotifiedKeyPresses: Int = 0
     private var lastNotifiedClicks: Int = 0
     
@@ -141,12 +178,13 @@ class StatsManager {
         dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
 
-        // 加载设置（默认为 true）
+        // 加载设置（按键/点击默认 true，通知/动态图标默认 false）
         showKeyPressesInMenuBar = userDefaults.object(forKey: showKeyPressesKey) as? Bool ?? true
         showMouseClicksInMenuBar = userDefaults.object(forKey: showMouseClicksKey) as? Bool ?? true
         notificationsEnabled = userDefaults.object(forKey: notificationsEnabledKey) as? Bool ?? false
         keyPressNotifyThreshold = userDefaults.object(forKey: keyPressNotifyThresholdKey) as? Int ?? 1000
         clickNotifyThreshold = userDefaults.object(forKey: clickNotifyThresholdKey) as? Int ?? 1000
+        enableDynamicIconColor = userDefaults.object(forKey: enableDynamicIconColorKey) as? Bool ?? false
 
         // 先初始化 currentStats 为默认值
         let calendar = Calendar.current
@@ -164,6 +202,11 @@ class StatsManager {
         
         isReadyForUpdates = true
         saveStats()
+        if enableDynamicIconColor {
+            resetInputRateBuckets()
+            startInputRateTracking()
+            updateCurrentInputRate()
+        }
         
         setupMidnightReset()
     }
@@ -176,6 +219,7 @@ class StatsManager {
         if let keyName = keyName, !keyName.isEmpty {
             currentStats.keyPressCounts[keyName, default: 0] += 1
         }
+        registerInputEvent()
         notifyMenuBarUpdate()
         notifyStatsUpdate()
         notifyKeyPressThresholdIfNeeded()
@@ -184,6 +228,7 @@ class StatsManager {
     func incrementLeftClicks() {
         ensureCurrentDay()
         currentStats.leftClicks += 1
+        registerInputEvent()
         notifyMenuBarUpdate()
         notifyStatsUpdate()
         notifyClickThresholdIfNeeded()
@@ -192,6 +237,7 @@ class StatsManager {
     func incrementRightClicks() {
         ensureCurrentDay()
         currentStats.rightClicks += 1
+        registerInputEvent()
         notifyMenuBarUpdate()
         notifyStatsUpdate()
         notifyClickThresholdIfNeeded()
@@ -206,7 +252,106 @@ class StatsManager {
     func addScrollDistance(_ distance: Double) {
         ensureCurrentDay()
         currentStats.scrollDistance += abs(distance)
+        registerInputEvent()
         scheduleDebouncedStatsUpdate()
+    }
+
+    // MARK: - 输入速率
+
+    func registerInputEvent() {
+        guard enableDynamicIconColor else { return }
+        inputRateLock.lock()
+        inputRateBuckets[inputRateBucketIndex] += 1
+        inputRateLock.unlock()
+    }
+
+    private func resetInputRateBuckets() {
+        inputRateLock.lock()
+        inputRateBuckets = Array(repeating: 0, count: inputRateBuckets.count)
+        inputRateBucketIndex = 0
+        inputRateLock.unlock()
+    }
+
+    private func startInputRateTracking() {
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { [weak self] in
+                self?.startInputRateTracking()
+            }
+            return
+        }
+
+        inputRateTimer?.invalidate()
+        inputRateTimer = Timer.scheduledTimer(withTimeInterval: inputRateBucketInterval, repeats: true) { [weak self] _ in
+            self?.advanceInputRateBucket()
+        }
+        if let timer = inputRateTimer {
+            RunLoop.main.add(timer, forMode: .common)
+        }
+    }
+
+    private func stopInputRateTracking() {
+        inputRateTimer?.invalidate()
+        inputRateTimer = nil
+    }
+
+    private func advanceInputRateBucket() {
+        inputRateLock.lock()
+        inputRateBucketIndex = (inputRateBucketIndex + 1) % inputRateBuckets.count
+        inputRateBuckets[inputRateBucketIndex] = 0
+        inputRateLock.unlock()
+        updateCurrentInputRate()
+    }
+
+    private func updateCurrentInputRate() {
+        inputRateLock.lock()
+        let totalEvents = inputRateBuckets.reduce(0, +)
+        inputRateLock.unlock()
+        currentInputRatePerSecond = Double(totalEvents) / inputRateWindowSeconds
+        currentIconTintColor = enableDynamicIconColor ? colorForRate(currentInputRatePerSecond) : nil
+        notifyMenuBarUpdate()
+    }
+
+    private func colorForRate(_ ratePerSecond: Double) -> NSColor? {
+        let apm = ratePerSecond * 60
+        let thresholds = inputRateApmThresholds
+        if apm < thresholds[1] { return nil }
+        if apm >= thresholds[3] { return .systemRed }
+
+        if apm <= thresholds[2] {
+            let progress = (apm - thresholds[1]) / (thresholds[2] - thresholds[1])
+            let lightGreen = lightenColor(.systemGreen, fraction: 0.6)
+            return interpolateColor(from: lightGreen, to: .systemGreen, progress: progress)
+        }
+
+        let progress = (apm - thresholds[2]) / (thresholds[3] - thresholds[2])
+        return interpolateColor(from: .systemYellow, to: .systemRed, progress: progress)
+    }
+
+    private func interpolateColor(from: NSColor, to: NSColor, progress: Double) -> NSColor {
+        let fromColor = from.usingColorSpace(.deviceRGB) ?? from
+        let toColor = to.usingColorSpace(.deviceRGB) ?? to
+        var fr: CGFloat = 0
+        var fg: CGFloat = 0
+        var fb: CGFloat = 0
+        var fa: CGFloat = 0
+        var tr: CGFloat = 0
+        var tg: CGFloat = 0
+        var tb: CGFloat = 0
+        var ta: CGFloat = 0
+        fromColor.getRed(&fr, green: &fg, blue: &fb, alpha: &fa)
+        toColor.getRed(&tr, green: &tg, blue: &tb, alpha: &ta)
+        let t = CGFloat(max(0, min(1, progress)))
+        return NSColor(
+            red: fr + (tr - fr) * t,
+            green: fg + (tg - fg) * t,
+            blue: fb + (tb - fb) * t,
+            alpha: fa + (ta - fa) * t
+        )
+    }
+
+    private func lightenColor(_ color: NSColor, fraction: CGFloat) -> NSColor {
+        let resolved = color.usingColorSpace(.deviceRGB) ?? color
+        return resolved.blended(withFraction: min(max(fraction, 0), 1), of: .white) ?? resolved
     }
 
     // MARK: - 通知阈值
@@ -334,6 +479,8 @@ class StatsManager {
         statsUpdateTimer = nil
         midnightCheckTimer?.invalidate()
         midnightCheckTimer = nil
+        inputRateTimer?.invalidate()
+        inputRateTimer = nil
         saveStats()
     }
     
