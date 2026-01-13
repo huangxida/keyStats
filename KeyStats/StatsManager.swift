@@ -252,7 +252,6 @@ class StatsManager {
     func addScrollDistance(_ distance: Double) {
         ensureCurrentDay()
         currentStats.scrollDistance += abs(distance)
-        registerInputEvent()
         scheduleDebouncedStatsUpdate()
     }
 
