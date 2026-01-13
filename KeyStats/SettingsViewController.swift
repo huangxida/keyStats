@@ -8,8 +8,14 @@ class SettingsViewController: NSViewController, NSTextFieldDelegate {
     private var launchAtLoginButton: NSButton!
     private var dynamicIconColorButton: NSButton!
     private var dynamicIconColorStylePopUp: NSPopUpButton!
+    private var dynamicIconColorStyleRow: NSStackView!
     private var dynamicIconColorHelpButton: NSButton!
     private lazy var dynamicIconColorHelpPopover: NSPopover = makeDynamicIconColorHelpPopover()
+    private weak var dynamicIconColorHelpContentView: NSView?
+    private var helpButtonTrackingArea: NSTrackingArea?
+    private var helpPopoverTrackingArea: NSTrackingArea?
+    private var isHoveringHelpButton = false
+    private var isHoveringHelpPopover = false
     private var resetButton: NSButton!
     private var showThresholdsButton: NSButton!
     private var thresholdStack: NSStackView!
@@ -51,6 +57,12 @@ class SettingsViewController: NSViewController, NSTextFieldDelegate {
         updateState()
     }
 
+    override func viewDidLayout() {
+        super.viewDidLayout()
+        updateHelpButtonTrackingArea()
+        updateHelpPopoverTrackingArea()
+    }
+
     // MARK: - UI
 
     private func setupUI() {
@@ -83,8 +95,10 @@ class SettingsViewController: NSViewController, NSTextFieldDelegate {
         dynamicIconColorHelpButton = NSButton()
         dynamicIconColorHelpButton.bezelStyle = .helpButton
         dynamicIconColorHelpButton.title = ""
-        dynamicIconColorHelpButton.target = self
-        dynamicIconColorHelpButton.action = #selector(showDynamicIconColorHelp)
+        dynamicIconColorHelpButton.controlSize = .mini
+        dynamicIconColorHelpButton.translatesAutoresizingMaskIntoConstraints = false
+        dynamicIconColorHelpButton.widthAnchor.constraint(equalToConstant: 12).isActive = true
+        dynamicIconColorHelpButton.heightAnchor.constraint(equalToConstant: 12).isActive = true
 
         let dynamicIconColorRow = NSStackView(views: [dynamicIconColorButton, dynamicIconColorHelpButton])
         dynamicIconColorRow.orientation = .horizontal
@@ -108,6 +122,7 @@ class SettingsViewController: NSViewController, NSTextFieldDelegate {
         styleRow.alignment = .centerY
         styleRow.spacing = 8
         styleRow.translatesAutoresizingMaskIntoConstraints = false
+        dynamicIconColorStyleRow = styleRow
 
         let optionsStack = NSStackView(views: [showKeyPressesButton, showMouseClicksButton, launchAtLoginButton, dynamicIconColorRow, styleRow, showThresholdsButton])
         optionsStack.orientation = .vertical
@@ -182,13 +197,15 @@ class SettingsViewController: NSViewController, NSTextFieldDelegate {
         if let item = dynamicIconColorStylePopUp.itemArray.first(where: { ($0.representedObject as? String) == style.rawValue }) {
             dynamicIconColorStylePopUp.select(item)
         }
-        dynamicIconColorStylePopUp.isEnabled = StatsManager.shared.enableDynamicIconColor
+        let isEnabled = StatsManager.shared.enableDynamicIconColor
+        dynamicIconColorStylePopUp.isEnabled = isEnabled
+        dynamicIconColorStyleRow.isHidden = !isEnabled
     }
 
     private func makeDynamicIconColorHelpPopover() -> NSPopover {
         let popover = NSPopover()
         popover.behavior = .transient
-        popover.contentSize = NSSize(width: 360, height: 420)
+        popover.contentSize = NSSize(width: 420, height: 520)
         popover.contentViewController = makeDynamicIconColorHelpViewController()
         return popover
     }
@@ -198,6 +215,8 @@ class SettingsViewController: NSViewController, NSTextFieldDelegate {
         let container = NSView()
         container.translatesAutoresizingMaskIntoConstraints = false
         viewController.view = container
+        dynamicIconColorHelpContentView = container
+        updateHelpPopoverTrackingArea()
 
         let titleLabel = NSTextField(labelWithString: NSLocalizedString("settings.dynamicIconColorHelp.title", comment: ""))
         titleLabel.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
@@ -208,45 +227,41 @@ class SettingsViewController: NSViewController, NSTextFieldDelegate {
         bodyLabel.textColor = .secondaryLabelColor
         bodyLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        let imageStack = NSStackView()
-        imageStack.orientation = .vertical
-        imageStack.alignment = .centerX
-        imageStack.spacing = 8
-        imageStack.translatesAutoresizingMaskIntoConstraints = false
+        let imageGridStack = NSStackView()
+        imageGridStack.orientation = .vertical
+        imageGridStack.alignment = .centerX
+        imageGridStack.spacing = 8
+        imageGridStack.translatesAutoresizingMaskIntoConstraints = false
 
         let imageNames = [
-            "DynamicColorTip1",
-            "DynamicColorTip2",
             "DynamicColorTip3",
-            "DynamicColorTip4",
+            "DynamicColorTip2",
+            "DynamicColorTip1",
+            "DynamicColorTip6",
             "DynamicColorTip5",
-            "DynamicColorTip6"
+            "DynamicColorTip4"
         ]
-        for name in imageNames {
+        var currentRow: NSStackView?
+        for (index, name) in imageNames.enumerated() {
+            if index % 3 == 0 {
+                let row = NSStackView()
+                row.orientation = .horizontal
+                row.alignment = .centerY
+                row.spacing = 8
+                row.translatesAutoresizingMaskIntoConstraints = false
+                imageGridStack.addArrangedSubview(row)
+                currentRow = row
+            }
             guard let image = NSImage(named: name) else { continue }
             let imageView = NSImageView(image: image)
             imageView.imageScaling = .scaleProportionallyDown
             imageView.translatesAutoresizingMaskIntoConstraints = false
-            imageView.widthAnchor.constraint(equalToConstant: 320).isActive = true
-            imageView.heightAnchor.constraint(lessThanOrEqualToConstant: 180).isActive = true
-            imageStack.addArrangedSubview(imageView)
+            imageView.widthAnchor.constraint(equalToConstant: 64).isActive = true
+            imageView.heightAnchor.constraint(lessThanOrEqualToConstant: 44).isActive = true
+            currentRow?.addArrangedSubview(imageView)
         }
 
-        let scrollView = NSScrollView()
-        scrollView.drawsBackground = false
-        scrollView.hasVerticalScroller = true
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
-        scrollView.documentView = imageStack
-
-        NSLayoutConstraint.activate([
-            imageStack.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor),
-            imageStack.trailingAnchor.constraint(equalTo: scrollView.contentView.trailingAnchor),
-            imageStack.topAnchor.constraint(equalTo: scrollView.contentView.topAnchor),
-            imageStack.bottomAnchor.constraint(equalTo: scrollView.contentView.bottomAnchor),
-            imageStack.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor)
-        ])
-
-        let contentStack = NSStackView(views: [titleLabel, bodyLabel, scrollView])
+        let contentStack = NSStackView(views: [titleLabel, bodyLabel, imageGridStack])
         contentStack.orientation = .vertical
         contentStack.alignment = .leading
         contentStack.spacing = 10
@@ -257,11 +272,81 @@ class SettingsViewController: NSViewController, NSTextFieldDelegate {
             contentStack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
             contentStack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
             contentStack.topAnchor.constraint(equalTo: container.topAnchor, constant: 12),
-            contentStack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -12),
-            scrollView.heightAnchor.constraint(equalToConstant: 220)
+            contentStack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -12)
         ])
 
         return viewController
+    }
+
+    private func updateHelpButtonTrackingArea() {
+        if let trackingArea = helpButtonTrackingArea {
+            dynamicIconColorHelpButton.removeTrackingArea(trackingArea)
+        }
+        let trackingArea = NSTrackingArea(
+            rect: dynamicIconColorHelpButton.bounds,
+            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+            owner: self,
+            userInfo: ["dynamicIconColorHelpButton": true]
+        )
+        dynamicIconColorHelpButton.addTrackingArea(trackingArea)
+        helpButtonTrackingArea = trackingArea
+    }
+
+    private func updateHelpPopoverTrackingArea() {
+        guard let container = dynamicIconColorHelpContentView else { return }
+        if let trackingArea = helpPopoverTrackingArea {
+            container.removeTrackingArea(trackingArea)
+        }
+        let trackingArea = NSTrackingArea(
+            rect: container.bounds,
+            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+            owner: self,
+            userInfo: ["dynamicIconColorHelpPopover": true]
+        )
+        container.addTrackingArea(trackingArea)
+        helpPopoverTrackingArea = trackingArea
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        if event.trackingArea?.userInfo?["dynamicIconColorHelpButton"] as? Bool == true {
+            isHoveringHelpButton = true
+            showDynamicIconColorHelpPopover()
+            return
+        }
+        if event.trackingArea?.userInfo?["dynamicIconColorHelpPopover"] as? Bool == true {
+            isHoveringHelpPopover = true
+            return
+        }
+        super.mouseEntered(with: event)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        if event.trackingArea?.userInfo?["dynamicIconColorHelpButton"] as? Bool == true {
+            isHoveringHelpButton = false
+            scheduleHelpPopoverCloseIfNeeded()
+            return
+        }
+        if event.trackingArea?.userInfo?["dynamicIconColorHelpPopover"] as? Bool == true {
+            isHoveringHelpPopover = false
+            scheduleHelpPopoverCloseIfNeeded()
+            return
+        }
+        super.mouseExited(with: event)
+    }
+
+    private func showDynamicIconColorHelpPopover() {
+        guard let button = dynamicIconColorHelpButton else { return }
+        if dynamicIconColorHelpPopover.isShown { return }
+        dynamicIconColorHelpPopover.show(relativeTo: button.bounds, of: button, preferredEdge: .maxY)
+    }
+
+    private func scheduleHelpPopoverCloseIfNeeded() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            guard let self = self else { return }
+            if !self.isHoveringHelpButton && !self.isHoveringHelpPopover {
+                self.dynamicIconColorHelpPopover.performClose(nil)
+            }
+        }
     }
 
     // MARK: - 通知阈值
@@ -402,14 +487,6 @@ class SettingsViewController: NSViewController, NSTextFieldDelegate {
         StatsManager.shared.menuBarUpdateHandler?()
     }
 
-    @objc private func showDynamicIconColorHelp(_ sender: NSButton) {
-        if dynamicIconColorHelpPopover.isShown {
-            dynamicIconColorHelpPopover.performClose(nil)
-            return
-        }
-        dynamicIconColorHelpPopover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxY)
-    }
- 
     @objc private func toggleLaunchAtLogin() {
         let shouldEnable = launchAtLoginButton.state == .on
         do {

@@ -5,12 +5,12 @@
 "button.permission" = "Grant Permission";
 "button.launchAtLogin" = "Open at Login";
 "settings.title" = "Settings";
-"settings.dynamicIconColor" = "Dynamic Icon Color";
-"settings.dynamicIconColorStyle" = "Dynamic Color Display";
+"settings.dynamicIconColor" = "Enable Dynamic Icon Color";
+"settings.dynamicIconColorStyle" = "Display When Enabled";
 "settings.dynamicIconColorStyle.icon" = "Tint Icon";
 "settings.dynamicIconColorStyle.dot" = "Status Dot";
 "settings.dynamicIconColorHelp.title" = "Dynamic Color Guide";
-"settings.dynamicIconColorHelp.body" = "Colors are calculated from recent input rate and shown in the menu bar.\n\nRate: a 3-second sliding window counts input events (keyboard/mouse/scroll) with 0.5-second buckets; current rate = total events in 3 seconds ÷ 3, in events per second.\nAPM: APM = events per second × 60.\nColor ranges:\n• APM < 80: no tint (default)\n• 80–160: light green → green\n• 160–240: yellow → red\n• ≥ 240: red\n\nChoose between icon tint and status dot in settings.\nDynamic color only applies when enabled; low rates keep the default style.\nDisplay mode and color updates stay in sync for clear feedback.";
+"settings.dynamicIconColorHelp.body" = "Colors are calculated from recent input rate and shown in the menu bar.\n\nAPM (events per minute) ranges:\n• < 80: no tint (default)\n• 80–160: light green → green\n• 160–240: yellow → red\n• ≥ 240: red";
 "settings.windowTitle" = "KeyStats Settings";
 "button.back" = "Back";
 "setting.showKeyPresses" = "Show Key Presses in Menu Bar";
