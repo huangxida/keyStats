@@ -8,6 +8,8 @@ class SettingsViewController: NSViewController, NSTextFieldDelegate {
     private var launchAtLoginButton: NSButton!
     private var dynamicIconColorButton: NSButton!
     private var dynamicIconColorStylePopUp: NSPopUpButton!
+    private var dynamicIconColorHelpButton: NSButton!
+    private lazy var dynamicIconColorHelpPopover: NSPopover = makeDynamicIconColorHelpPopover()
     private var resetButton: NSButton!
     private var showThresholdsButton: NSButton!
     private var thresholdStack: NSStackView!
@@ -78,6 +80,18 @@ class SettingsViewController: NSViewController, NSTextFieldDelegate {
                                           target: self,
                                           action: #selector(toggleDynamicIconColor))
 
+        dynamicIconColorHelpButton = NSButton()
+        dynamicIconColorHelpButton.bezelStyle = .helpButton
+        dynamicIconColorHelpButton.title = ""
+        dynamicIconColorHelpButton.target = self
+        dynamicIconColorHelpButton.action = #selector(showDynamicIconColorHelp)
+
+        let dynamicIconColorRow = NSStackView(views: [dynamicIconColorButton, dynamicIconColorHelpButton])
+        dynamicIconColorRow.orientation = .horizontal
+        dynamicIconColorRow.alignment = .centerY
+        dynamicIconColorRow.spacing = 6
+        dynamicIconColorRow.translatesAutoresizingMaskIntoConstraints = false
+
         dynamicIconColorStylePopUp = NSPopUpButton()
         let iconStyleTitle = NSLocalizedString("settings.dynamicIconColorStyle.icon", comment: "")
         let dotStyleTitle = NSLocalizedString("settings.dynamicIconColorStyle.dot", comment: "")
@@ -95,7 +109,7 @@ class SettingsViewController: NSViewController, NSTextFieldDelegate {
         styleRow.spacing = 8
         styleRow.translatesAutoresizingMaskIntoConstraints = false
 
-        let optionsStack = NSStackView(views: [showKeyPressesButton, showMouseClicksButton, launchAtLoginButton, dynamicIconColorButton, styleRow, showThresholdsButton])
+        let optionsStack = NSStackView(views: [showKeyPressesButton, showMouseClicksButton, launchAtLoginButton, dynamicIconColorRow, styleRow, showThresholdsButton])
         optionsStack.orientation = .vertical
         optionsStack.alignment = .leading
         optionsStack.spacing = 8
@@ -169,6 +183,85 @@ class SettingsViewController: NSViewController, NSTextFieldDelegate {
             dynamicIconColorStylePopUp.select(item)
         }
         dynamicIconColorStylePopUp.isEnabled = StatsManager.shared.enableDynamicIconColor
+    }
+
+    private func makeDynamicIconColorHelpPopover() -> NSPopover {
+        let popover = NSPopover()
+        popover.behavior = .transient
+        popover.contentSize = NSSize(width: 360, height: 420)
+        popover.contentViewController = makeDynamicIconColorHelpViewController()
+        return popover
+    }
+
+    private func makeDynamicIconColorHelpViewController() -> NSViewController {
+        let viewController = NSViewController()
+        let container = NSView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        viewController.view = container
+
+        let titleLabel = NSTextField(labelWithString: NSLocalizedString("settings.dynamicIconColorHelp.title", comment: ""))
+        titleLabel.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        let bodyLabel = NSTextField(wrappingLabelWithString: NSLocalizedString("settings.dynamicIconColorHelp.body", comment: ""))
+        bodyLabel.font = NSFont.systemFont(ofSize: 12)
+        bodyLabel.textColor = .secondaryLabelColor
+        bodyLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        let imageStack = NSStackView()
+        imageStack.orientation = .vertical
+        imageStack.alignment = .centerX
+        imageStack.spacing = 8
+        imageStack.translatesAutoresizingMaskIntoConstraints = false
+
+        let imageNames = [
+            "DynamicColorTip1",
+            "DynamicColorTip2",
+            "DynamicColorTip3",
+            "DynamicColorTip4",
+            "DynamicColorTip5",
+            "DynamicColorTip6"
+        ]
+        for name in imageNames {
+            guard let image = NSImage(named: name) else { continue }
+            let imageView = NSImageView(image: image)
+            imageView.imageScaling = .scaleProportionallyDown
+            imageView.translatesAutoresizingMaskIntoConstraints = false
+            imageView.widthAnchor.constraint(equalToConstant: 320).isActive = true
+            imageView.heightAnchor.constraint(lessThanOrEqualToConstant: 180).isActive = true
+            imageStack.addArrangedSubview(imageView)
+        }
+
+        let scrollView = NSScrollView()
+        scrollView.drawsBackground = false
+        scrollView.hasVerticalScroller = true
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.documentView = imageStack
+
+        NSLayoutConstraint.activate([
+            imageStack.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor),
+            imageStack.trailingAnchor.constraint(equalTo: scrollView.contentView.trailingAnchor),
+            imageStack.topAnchor.constraint(equalTo: scrollView.contentView.topAnchor),
+            imageStack.bottomAnchor.constraint(equalTo: scrollView.contentView.bottomAnchor),
+            imageStack.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor)
+        ])
+
+        let contentStack = NSStackView(views: [titleLabel, bodyLabel, scrollView])
+        contentStack.orientation = .vertical
+        contentStack.alignment = .leading
+        contentStack.spacing = 10
+        contentStack.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(contentStack)
+
+        NSLayoutConstraint.activate([
+            contentStack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
+            contentStack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
+            contentStack.topAnchor.constraint(equalTo: container.topAnchor, constant: 12),
+            contentStack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -12),
+            scrollView.heightAnchor.constraint(equalToConstant: 220)
+        ])
+
+        return viewController
     }
 
     // MARK: - 通知阈值
@@ -307,6 +400,14 @@ class SettingsViewController: NSViewController, NSTextFieldDelegate {
         guard let rawValue = dynamicIconColorStylePopUp.selectedItem?.representedObject as? String else { return }
         UserDefaults.standard.set(rawValue, forKey: dynamicIconColorStyleKey)
         StatsManager.shared.menuBarUpdateHandler?()
+    }
+
+    @objc private func showDynamicIconColorHelp(_ sender: NSButton) {
+        if dynamicIconColorHelpPopover.isShown {
+            dynamicIconColorHelpPopover.performClose(nil)
+            return
+        }
+        dynamicIconColorHelpPopover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxY)
     }
  
     @objc private func toggleLaunchAtLogin() {
