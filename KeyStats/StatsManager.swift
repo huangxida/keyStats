@@ -111,6 +111,8 @@ struct AllTimeStats {
     var maxDailyClicks: Int
     var maxDailyClicksDate: Date?
     var mostActiveWeekday: Int?
+    var keyActiveDays: Int
+    var clickActiveDays: Int
     
     var totalClicks: Int {
         return totalLeftClicks + totalRightClicks
@@ -169,7 +171,9 @@ struct AllTimeStats {
             maxDailyKeyPressesDate: nil,
             maxDailyClicks: 0,
             maxDailyClicksDate: nil,
-            mostActiveWeekday: nil
+            mostActiveWeekday: nil,
+            keyActiveDays: 0,
+            clickActiveDays: 0
         )
     }
 }
@@ -849,6 +853,7 @@ extension StatsManager {
         var maxAvg = 0.0
         var bestWeekday: Int?
         for (day, data) in weekdayStats {
+            guard data.count > 0 else { continue }
             let avg = Double(data.total) / Double(data.count)
             if avg > maxAvg {
                 maxAvg = avg
@@ -881,6 +886,12 @@ extension StatsManager {
             total.maxDailyClicks = dailyClicks
             total.maxDailyClicksDate = daily.date
         }
+        if daily.keyPresses > 0 {
+            total.keyActiveDays += 1
+        }
+        if dailyClicks > 0 {
+            total.clickActiveDays += 1
+        }
 
         let date = Calendar.current.startOfDay(for: daily.date)
         
@@ -888,7 +899,8 @@ extension StatsManager {
         let weekday = Calendar.current.component(.weekday, from: date)
         let dailyTotal = daily.keyPresses + dailyClicks
         let current = weekdays[weekday, default: (0, 0)]
-        weekdays[weekday] = (current.total + dailyTotal, current.count + 1)
+        let increment = dailyTotal > 0 ? 1 : 0
+        weekdays[weekday] = (current.total + dailyTotal, current.count + increment)
         
         if let currentFirst = total.firstDate {
             if date < currentFirst {

@@ -287,11 +287,14 @@ class AllTimeStatsViewController: NSViewController {
         
         let avgKeys: Int
         let avgClicks: Int
-        if stats.activeDays > 0 {
-            avgKeys = Int((Double(stats.totalKeyPresses) / Double(stats.activeDays)).rounded())
-            avgClicks = Int((Double(stats.totalClicks) / Double(stats.activeDays)).rounded())
+        if stats.keyActiveDays > 0 {
+            avgKeys = Int((Double(stats.totalKeyPresses) / Double(stats.keyActiveDays)).rounded())
         } else {
             avgKeys = 0
+        }
+        if stats.clickActiveDays > 0 {
+            avgClicks = Int((Double(stats.totalClicks) / Double(stats.clickActiveDays)).rounded())
+        } else {
             avgClicks = 0
         }
         
