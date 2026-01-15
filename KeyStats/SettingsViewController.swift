@@ -1,4 +1,5 @@
 import Cocoa
+import TelemetryDeck
 
 class SettingsViewController: NSViewController, NSTextFieldDelegate {
 
@@ -492,6 +493,7 @@ class SettingsViewController: NSViewController, NSTextFieldDelegate {
         do {
             try LaunchAtLoginManager.shared.setEnabled(shouldEnable)
             updateState()
+            TelemetryDeck.signal("settingChanged", parameters: ["setting": "launchAtLogin", "enabled": String(shouldEnable)])
         } catch {
             updateState()
             showLaunchAtLoginError()
@@ -510,6 +512,7 @@ class SettingsViewController: NSViewController, NSTextFieldDelegate {
 
         if alert.runModal() == .alertFirstButtonReturn {
             StatsManager.shared.resetStats()
+            TelemetryDeck.signal("statsReset")
         }
     }
 

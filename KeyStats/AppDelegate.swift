@@ -1,4 +1,5 @@
 import Cocoa
+import TelemetryDeck
 
 @main
 class AppDelegate: NSObject, NSApplicationDelegate {
@@ -10,10 +11,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private let launchAtLoginPromptedKey = "launchAtLoginPrompted"
     
     func applicationDidFinishLaunching(_ aNotification: Notification) {
+        // 初始化 TelemetryDeck
+        var config = TelemetryDeck.Config(appID: "24F911EE-3D21-4EE7-9E7D-5F9FA485B66E")
+        #if DEBUG
+        config.testMode = false  // Debug 构建也发送正式数据
+        #endif
+        TelemetryDeck.initialize(config: config)
+        TelemetryDeck.signal("appLaunched")
+
         // 初始化菜单栏控制器
         menuBarController = MenuBarController()
         applyAppIcon()
-        
+
         // 检查并请求辅助功能权限
         checkAndRequestPermission()
     }
@@ -56,6 +65,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self.permissionCheckTimer = nil
                     InputMonitor.shared.startMonitoring()
                     self.promptLaunchAtLoginIfNeeded()
+                    TelemetryDeck.signal("permissionGranted", parameters: ["permission": "accessibility"])
                     print("权限已授予，开始监听")
                     return
                 }

@@ -1,4 +1,5 @@
 import Cocoa
+import TelemetryDeck
 
 enum DynamicIconColorStyle: String {
     case icon
@@ -82,9 +83,10 @@ class MenuBarController {
         } else {
             return
         }
-        
+
         // 激活应用以确保弹窗可以接收焦点
         NSApp.activate(ignoringOtherApps: true)
+        TelemetryDeck.signal("popoverOpened")
     }
     
     private func closePopover() {
